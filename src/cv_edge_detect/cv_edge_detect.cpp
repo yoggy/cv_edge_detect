@@ -1,5 +1,6 @@
 #include "stdafx.h"
 
+cv::VideoCapture capture;
 cv::Mat capture_img;
 cv::Mat canny_img;
 cv::Mat dilate_img;
@@ -7,8 +8,32 @@ cv::Mat inv_img;
 cv::Mat canvas_img;
 
 bool press_button_l = false;
-int mouse_x;
-int mouse_y;
+cv::Point mouse_pos, old_mouse_pos;
+
+#define OSC_HOST "127.0.0.1"
+#define OSC_PORT 7000
+#define OSC_OUTPUT_BUFFER_SIZE 1024
+
+UdpTransmitSocket *udp = nullptr;
+char osc_buf[OSC_OUTPUT_BUFFER_SIZE];
+osc::OutboundPacketStream osc_msg(osc_buf, OSC_OUTPUT_BUFFER_SIZE);
+
+void osc_send_pop()
+{
+	osc_msg.Clear();
+	osc_msg << osc::BeginMessage("/pop");
+	osc_msg << osc::EndMessage;
+	udp->Send(osc_msg.Data(), osc_msg.Size());
+}
+
+void osc_send_noise(const float &volume)
+{
+	osc_msg.Clear();
+	osc_msg << osc::BeginMessage("/noise");
+	osc_msg << volume;
+	osc_msg << osc::EndMessage;
+	udp->Send(osc_msg.Data(), osc_msg.Size());
+}
 
 cv::Rect correct_rect(const cv::Rect &src, const cv::Size &size)
 {
@@ -31,18 +56,19 @@ void onMouse(int event, int x, int y, int, void*)
 {
 	if (capture_img.empty()) return;
 
-	mouse_x = x;
-	mouse_y = y;
+	old_mouse_pos = mouse_pos;
+	mouse_pos = cv::Point(x, y);
 
-	if (event == cv::EVENT_LBUTTONDOWN) {
+	if (event == cv::EVENT_LBUTTONDOWN && press_button_l == false) {
 		press_button_l = true;
+		old_mouse_pos = cv::Point(x, y);
 	}
 	else if (event == cv::EVENT_LBUTTONUP) {
 		press_button_l = false;
 	}
 }
 
-cv::Rect create_roi(int x, int y, int w)
+cv::Rect create_roi(const int &x, const int &y, const int &w)
 {
 	cv::Rect roi;
 
@@ -69,14 +95,76 @@ cv::Mat create_mask(const cv::Rect &roi)
 	return mask;
 }
 
+void process_capture()
+{
+	capture >> capture_img;
+	cv::Canny(capture_img, canny_img, 100, 300);
+	cv::dilate(canny_img, dilate_img, cv::Mat());
+	cv::bitwise_not(dilate_img, inv_img);
+}
+
+void process_pseudo_pen_drawing(const int &x, const int &y)
+{
+	// drawing effect
+	cv::Rect roi = create_roi(x, y, 30);
+	cv::Mat mask = create_mask(roi);
+
+	cv::Mat roi_img;
+	cv::Mat pen_img;
+
+	inv_img(roi).copyTo(roi_img);
+
+	// 
+	pen_img = roi_img * 0.90;
+
+	pen_img.copyTo(canvas_img(roi), mask);
+}
+
+void process_pseudo_frottage()
+{
+	if (press_button_l == false) {
+		osc_send_noise(0.0);
+		return;
+	}
+
+	cv::Point st = old_mouse_pos;
+	cv::Point et = mouse_pos;
+	cv::Point diff = et - st;
+	float diff_len = sqrt(diff.x * diff.x + diff.y * diff.y);
+	
+	int step = abs(diff.x);
+	if (step < abs(diff.y)) step = abs(diff.y);
+
+	// drawing
+	if (step > 0) {
+		for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
+			float x = st.x + diff.x * p;
+			float y = st.y + diff.y * p;
+			process_pseudo_pen_drawing((int)x, (int)y);
+		}
+	}
+
+	// sound effect
+	if (diff_len == 0.0f) {
+		osc_send_noise(0.0f);
+	}
+	else {
+		float p = diff_len / 200;
+		if (p > 0.8f) p = 0.8f;
+		p += 0.2f;
+		osc_send_noise(p);
+	}
+}
+
 int main(int argc, char* argv[])
 {
-	cv::VideoCapture capture;
 	bool rv = capture.open(0);
 	if (rv == false) {
 		printf("error : capture.open() failed...\n");
 		return -1;
 	}
+
+	udp = new UdpTransmitSocket(IpEndpointName(OSC_HOST, OSC_PORT));
 
 	capture >> capture_img;
 	canvas_img.create(capture_img.size(), CV_8UC1);
@@ -86,18 +174,11 @@ int main(int argc, char* argv[])
 	cv::setMouseCallback("canvas_img", onMouse, NULL);
 
 	while (true) {
-		capture >> capture_img;
-		cv::Canny(capture_img, canny_img, 100, 300);
-		cv::dilate(canny_img, dilate_img, cv::Mat());
-		cv::bitwise_not(dilate_img, inv_img);
-
-		if (press_button_l == true) {
-			cv::Rect roi = create_roi(mouse_x, mouse_y, 30);
-			cv::Mat mask = create_mask(roi);
-			inv_img(roi).copyTo(canvas_img(roi), mask);
-		}
+		process_capture();
+		process_pseudo_frottage();
 
 		cv::imshow("captuer_img", capture_img);
+		cv::imshow("inv_img", inv_img);
 		cv::imshow("canvas_img", canvas_img);
 
 		int c = cv::waitKey(1);
@@ -112,5 +193,11 @@ int main(int argc, char* argv[])
 	capture.release();
 	cv::destroyAllWindows();
 
+	osc_send_noise(0.0f);
+
+	delete udp;
+	udp = nullptr;
+
+	return 0;
 }
 
