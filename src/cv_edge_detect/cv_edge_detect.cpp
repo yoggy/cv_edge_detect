@@ -35,6 +35,16 @@ void osc_send_noise(const float &volume)
 	udp->Send(osc_msg.Data(), osc_msg.Size());
 }
 
+bool is_inner(const cv::Point &p, const cv::Size & size)
+{
+	if (p.x < 0) return false;
+	if (p.y < 0) return false;
+	if (size.width <= p.x) return false;
+	if (size.height <= p.y) return false;
+
+	return true;
+}
+
 cv::Rect correct_rect(const cv::Rect &src, const cv::Size &size)
 {
 	cv::Rect r = src;
@@ -90,7 +100,7 @@ void process_capture()
 void process_pseudo_pen_drawing(const int &x, const int &y)
 {
 	// drawing effect
-	cv::Rect roi = create_roi(x, y, 20);
+	cv::Rect roi = create_roi(x, y, 30);
 	cv::Mat mask = create_mask(roi);
 
 	cv::Mat roi_img;
@@ -125,7 +135,7 @@ void process_pseudo_frottage()
 	}
 
 	// drawing
-	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
+	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step * 2)) {
 		float x = st.x + diff.x * p;
 		float y = st.y + diff.y * p;
 		process_pseudo_pen_drawing((int)x, (int)y);
@@ -142,10 +152,10 @@ void process_pseudo_frottage()
 	int c_max = 0;
 
 	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
-		float x = st.x + diff.x * p;
-		float y = st.y + diff.y * p;
+		cv::Point pt = cv::Point(st.x + diff.x * p, st.y + diff.y * p);
+		if (is_inner(pt, inv_img.size()) == false) continue;
 
-		uchar c = inv_img.at<uchar>(cv::Point(x, y));
+		uchar c = inv_img.at<uchar>(pt);
 		if (c <= c_min) {
 			c_min = c;
 		}
@@ -196,7 +206,6 @@ int main(int argc, char* argv[])
 
 	while (true) {
 		process_capture();
-//		process_pseudo_frottage();
 
 		cv::imshow("captuer_img", capture_img);
 		cv::imshow("inv_img", inv_img);
@@ -221,4 +230,3 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
-
