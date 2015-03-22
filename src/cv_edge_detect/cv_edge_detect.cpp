@@ -121,24 +121,42 @@ void process_pseudo_frottage()
 	int step = abs(diff.x);
 	if (step < abs(diff.y)) step = abs(diff.y);
 
-	// drawing
-	if (step > 0) {
-		for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
-			float x = st.x + diff.x * p;
-			float y = st.y + diff.y * p;
-			process_pseudo_pen_drawing((int)x, (int)y);
-		}
+	if (step == 0) {
+		osc_send_noise(0.0f);
+		return;
 	}
 
-	// sound effect
-	if (diff_len == 0.0f) {
-		osc_send_noise(0.0f);
+	// drawing
+	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
+		float x = st.x + diff.x * p;
+		float y = st.y + diff.y * p;
+		process_pseudo_pen_drawing((int)x, (int)y);
 	}
-	else {
-		float p = diff_len / 500;
-		if (p > 0.8f) p = 0.8f;
-		p += 0.1f;
-		osc_send_noise(p);
+
+	// sound effect (noise)
+	float p = diff_len / 100;
+	if (p > 0.5f) p = 0.5f;
+	p += 0.2f;
+	osc_send_noise(p);
+
+	// sound effect (pop noise)
+	int c_min = 255;
+	int c_max = 0;
+
+	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
+		float x = st.x + diff.x * p;
+		float y = st.y + diff.y * p;
+
+		uchar c = inv_img.at<uchar>(cv::Point(x, y));
+		if (c <= c_min) {
+			c_min = c;
+		}
+		if (c_max <= c) {
+			c_max = c;
+		}
+	}
+	if (c_max - c_min > 100) {
+		osc_send_pop();
 	}
 }
 
