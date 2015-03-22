@@ -52,22 +52,6 @@ cv::Rect correct_rect(const cv::Rect &src, const cv::Size &size)
 	return r;
 }
 
-void onMouse(int event, int x, int y, int, void*)
-{
-	if (capture_img.empty()) return;
-
-	old_mouse_pos = mouse_pos;
-	mouse_pos = cv::Point(x, y);
-
-	if (event == cv::EVENT_LBUTTONDOWN && press_button_l == false) {
-		press_button_l = true;
-		old_mouse_pos = cv::Point(x, y);
-	}
-	else if (event == cv::EVENT_LBUTTONUP) {
-		press_button_l = false;
-	}
-}
-
 cv::Rect create_roi(const int &x, const int &y, const int &w)
 {
 	cv::Rect roi;
@@ -131,7 +115,9 @@ void process_pseudo_frottage()
 	cv::Point et = mouse_pos;
 	cv::Point diff = et - st;
 	float diff_len = sqrt(diff.x * diff.x + diff.y * diff.y);
-	
+
+	printf("(%d,%d)-(%d,%d)\n", st.x, st.y, et.x, et.y);
+
 	int step = abs(diff.x);
 	if (step < abs(diff.y)) step = abs(diff.y);
 
@@ -149,11 +135,29 @@ void process_pseudo_frottage()
 		osc_send_noise(0.0f);
 	}
 	else {
-		float p = diff_len / 200;
+		float p = diff_len / 500;
 		if (p > 0.8f) p = 0.8f;
-		p += 0.2f;
+		p += 0.1f;
 		osc_send_noise(p);
 	}
+}
+
+void onMouse(int event, int x, int y, int, void*)
+{
+	if (capture_img.empty()) return;
+
+	old_mouse_pos = mouse_pos;
+	mouse_pos = cv::Point(x, y);
+
+	if (event == cv::EVENT_LBUTTONDOWN && press_button_l == false) {
+		press_button_l = true;
+		old_mouse_pos = cv::Point(x, y);
+	}
+	else if (event == cv::EVENT_LBUTTONUP) {
+		press_button_l = false;
+	}
+
+	process_pseudo_frottage();
 }
 
 int main(int argc, char* argv[])
@@ -175,7 +179,7 @@ int main(int argc, char* argv[])
 
 	while (true) {
 		process_capture();
-		process_pseudo_frottage();
+//		process_pseudo_frottage();
 
 		cv::imshow("captuer_img", capture_img);
 		cv::imshow("inv_img", inv_img);
