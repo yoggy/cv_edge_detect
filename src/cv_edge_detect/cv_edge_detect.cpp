@@ -90,7 +90,7 @@ void process_capture()
 void process_pseudo_pen_drawing(const int &x, const int &y)
 {
 	// drawing effect
-	cv::Rect roi = create_roi(x, y, 30);
+	cv::Rect roi = create_roi(x, y, 20);
 	cv::Mat mask = create_mask(roi);
 
 	cv::Mat roi_img;
@@ -185,6 +185,7 @@ int main(int argc, char* argv[])
 	}
 
 	udp = new UdpTransmitSocket(IpEndpointName(OSC_HOST, OSC_PORT));
+	osc_send_noise(0.0);
 
 	capture >> capture_img;
 	canvas_img.create(capture_img.size(), CV_8UC1);
