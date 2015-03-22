@@ -116,8 +116,6 @@ void process_pseudo_frottage()
 	cv::Point diff = et - st;
 	float diff_len = sqrt(diff.x * diff.x + diff.y * diff.y);
 
-	printf("(%d,%d)-(%d,%d)\n", st.x, st.y, et.x, et.y);
-
 	int step = abs(diff.x);
 	if (step < abs(diff.y)) step = abs(diff.y);
 
