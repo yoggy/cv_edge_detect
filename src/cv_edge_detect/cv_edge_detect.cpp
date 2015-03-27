@@ -142,9 +142,9 @@ void process_pseudo_frottage()
 	}
 
 	// sound effect (noise)
-	float p = diff_len / 100;
-	if (p > 0.5f) p = 0.5f;
-	p += 0.2f;
+	float p = diff_len / 200;
+	if (p > 0.9f) p = 0.9f;
+	p += 0.1f;
 	osc_send_noise(p);
 
 	// sound effect (pop noise)
