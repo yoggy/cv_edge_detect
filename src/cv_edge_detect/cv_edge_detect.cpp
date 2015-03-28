@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include "FPSCounter.h"
 
 cv::VideoCapture capture;
 cv::Mat capture_img;
@@ -6,6 +7,9 @@ cv::Mat canny_img;
 cv::Mat dilate_img;
 cv::Mat inv_img;
 cv::Mat canvas_img;
+
+cv::Mat test_pattern_img;
+bool use_test_pattern_img = false;
 
 bool press_button_l = false;
 cv::Point mouse_pos, old_mouse_pos;
@@ -17,6 +21,9 @@ cv::Point mouse_pos, old_mouse_pos;
 UdpTransmitSocket *udp = nullptr;
 char osc_buf[OSC_OUTPUT_BUFFER_SIZE];
 osc::OutboundPacketStream osc_msg(osc_buf, OSC_OUTPUT_BUFFER_SIZE);
+
+FPSCounter fps_mouse("mouse", 100, true);
+FPSCounter fps_capture("capture", 100, true);
 
 void osc_send_pop()
 {
@@ -97,7 +104,15 @@ void process_capture()
 	cv::bitwise_not(dilate_img, inv_img);
 }
 
-void process_pseudo_pen_drawing(const int &x, const int &y)
+cv::Mat get_source_image() {
+	if (use_test_pattern_img) {
+		return test_pattern_img;
+	}
+
+	return inv_img;
+}
+
+void process_pseudo_pen_drawing(cv::Mat &canvas_img, const cv::Mat &src_img, const int &x, const int &y)
 {
 	// drawing effect
 	cv::Rect roi = create_roi(x, y, 30);
@@ -106,15 +121,14 @@ void process_pseudo_pen_drawing(const int &x, const int &y)
 	cv::Mat roi_img;
 	cv::Mat pen_img;
 
-	inv_img(roi).copyTo(roi_img);
+	src_img(roi).copyTo(roi_img);
 
-	// 
 	pen_img = roi_img * 0.90;
 
 	pen_img.copyTo(canvas_img(roi), mask);
 }
 
-void process_pseudo_frottage()
+void process_pseudo_frottage(const cv::Mat &src_img, cv::Mat &canvas_img)
 {
 	if (press_button_l == false) {
 		osc_send_scratch(0.0);
@@ -124,7 +138,7 @@ void process_pseudo_frottage()
 	cv::Point st = old_mouse_pos;
 	cv::Point et = mouse_pos;
 	cv::Point diff = et - st;
-	float diff_len = sqrt(diff.x * diff.x + diff.y * diff.y);
+	float diff_len = (float)sqrt(diff.x * diff.x + diff.y * diff.y);
 
 	int step = abs(diff.x);
 	if (step < abs(diff.y)) step = abs(diff.y);
@@ -135,10 +149,10 @@ void process_pseudo_frottage()
 	}
 
 	// drawing
-	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step * 2)) {
+	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step * 10)) {
 		float x = st.x + diff.x * p;
 		float y = st.y + diff.y * p;
-		process_pseudo_pen_drawing((int)x, (int)y);
+		process_pseudo_pen_drawing(canvas_img, src_img, (int)x, (int)y);
 	}
 
 	// sound effect (noise)
@@ -152,10 +166,10 @@ void process_pseudo_frottage()
 	int c_max = 0;
 
 	for (float p = 0.0f; p <= 1.0f; p += (1.0f / (float)step)) {
-		cv::Point pt = cv::Point(st.x + diff.x * p, st.y + diff.y * p);
-		if (is_inner(pt, inv_img.size()) == false) continue;
+		cv::Point pt = cv::Point((int)(st.x + diff.x * p), (int)(st.y + diff.y * p));
+		if (is_inner(pt, src_img.size()) == false) continue;
 
-		uchar c = inv_img.at<uchar>(pt);
+		uchar c = src_img.at<uchar>(pt);
 		if (c <= c_min) {
 			c_min = c;
 		}
@@ -177,13 +191,17 @@ void onMouse(int event, int x, int y, int, void*)
 
 	if (event == cv::EVENT_LBUTTONDOWN && press_button_l == false) {
 		press_button_l = true;
+		fps_mouse.clear();
 		old_mouse_pos = cv::Point(x, y);
 	}
 	else if (event == cv::EVENT_LBUTTONUP) {
 		press_button_l = false;
 	}
 
-	process_pseudo_frottage();
+	if (press_button_l) {
+		fps_mouse.check();
+		process_pseudo_frottage(get_source_image(), canvas_img);
+	}
 }
 
 int main(int argc, char* argv[])
@@ -201,6 +219,13 @@ int main(int argc, char* argv[])
 	canvas_img.create(capture_img.size(), CV_8UC1);
 	canvas_img = cv::Scalar(255, 255, 255);
 
+	test_pattern_img.create(capture_img.size(), CV_8UC1);
+	test_pattern_img = cv::Scalar(255, 255, 255);
+	int w = test_pattern_img.cols;
+	int h = test_pattern_img.rows;
+	cv::line(test_pattern_img, cv::Point(w / 3, 0), cv::Point(w / 3, h), cv::Scalar(0), 3);
+	cv::line(test_pattern_img, cv::Point(w / 3 * 2, 0), cv::Point(w / 3 * 2, h), cv::Scalar(0), 3);
+
 	cv::namedWindow("canvas_img");
 	cv::setMouseCallback("canvas_img", onMouse, NULL);
 
@@ -208,7 +233,7 @@ int main(int argc, char* argv[])
 		process_capture();
 
 		cv::imshow("captuer_img", capture_img);
-		cv::imshow("inv_img", inv_img);
+		cv::imshow("source_image", get_source_image());
 		cv::imshow("canvas_img", canvas_img);
 
 		int c = cv::waitKey(1);
@@ -218,6 +243,11 @@ int main(int argc, char* argv[])
 		else if (c == 'c') {
 			canvas_img = cv::Scalar(255, 255, 255);
 		}
+		else if (c == 't') {
+			use_test_pattern_img = !use_test_pattern_img;
+		}
+
+		fps_capture.check();
 	}
 
 	capture.release();

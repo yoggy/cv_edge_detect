@@ -2,9 +2,11 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="FPSCounter.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cv_edge_detect.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="FPSCounter.cpp" />
   </ItemGroup>
 </Project>
