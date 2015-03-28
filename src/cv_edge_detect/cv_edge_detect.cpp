@@ -26,10 +26,10 @@ void osc_send_pop()
 	udp->Send(osc_msg.Data(), osc_msg.Size());
 }
 
-void osc_send_noise(const float &volume)
+void osc_send_scratch(const float &volume)
 {
 	osc_msg.Clear();
-	osc_msg << osc::BeginMessage("/noise");
+	osc_msg << osc::BeginMessage("/scratch");
 	osc_msg << volume;
 	osc_msg << osc::EndMessage;
 	udp->Send(osc_msg.Data(), osc_msg.Size());
@@ -117,7 +117,7 @@ void process_pseudo_pen_drawing(const int &x, const int &y)
 void process_pseudo_frottage()
 {
 	if (press_button_l == false) {
-		osc_send_noise(0.0);
+		osc_send_scratch(0.0);
 		return;
 	}
 
@@ -130,7 +130,7 @@ void process_pseudo_frottage()
 	if (step < abs(diff.y)) step = abs(diff.y);
 
 	if (step == 0) {
-		osc_send_noise(0.0f);
+		osc_send_scratch(0.0f);
 		return;
 	}
 
@@ -145,7 +145,7 @@ void process_pseudo_frottage()
 	float p = diff_len / 200;
 	if (p > 0.9f) p = 0.9f;
 	p += 0.1f;
-	osc_send_noise(p);
+	osc_send_scratch(p);
 
 	// sound effect (pop noise)
 	int c_min = 255;
@@ -195,7 +195,7 @@ int main(int argc, char* argv[])
 	}
 
 	udp = new UdpTransmitSocket(IpEndpointName(OSC_HOST, OSC_PORT));
-	osc_send_noise(0.0);
+	osc_send_scratch(0.0);
 
 	capture >> capture_img;
 	canvas_img.create(capture_img.size(), CV_8UC1);
@@ -223,7 +223,7 @@ int main(int argc, char* argv[])
 	capture.release();
 	cv::destroyAllWindows();
 
-	osc_send_noise(0.0f);
+	osc_send_scratch(0.0f);
 
 	delete udp;
 	udp = nullptr;
