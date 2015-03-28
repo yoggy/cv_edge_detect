@@ -96,22 +96,6 @@ cv::Mat create_mask(const cv::Rect &roi)
 	return mask;
 }
 
-void process_capture()
-{
-	capture >> capture_img;
-	cv::Canny(capture_img, canny_img, 100, 300);
-	cv::dilate(canny_img, dilate_img, cv::Mat());
-	cv::bitwise_not(dilate_img, inv_img);
-}
-
-cv::Mat get_source_image() {
-	if (use_test_pattern_img) {
-		return test_pattern_img;
-	}
-
-	return inv_img;
-}
-
 void process_pseudo_pen_drawing(cv::Mat &canvas_img, const cv::Mat &src_img, const int &x, const int &y)
 {
 	// drawing effect
@@ -182,6 +166,14 @@ void process_pseudo_frottage(const cv::Mat &src_img, cv::Mat &canvas_img)
 	}
 }
 
+cv::Mat get_source_image() {
+	if (use_test_pattern_img) {
+		return test_pattern_img;
+	}
+
+	return inv_img;
+}
+
 void onMouse(int event, int x, int y, int, void*)
 {
 	if (capture_img.empty()) return;
@@ -204,17 +196,26 @@ void onMouse(int event, int x, int y, int, void*)
 	}
 }
 
-int main(int argc, char* argv[])
+void process_capture()
 {
-	bool rv = capture.open(0);
-	if (rv == false) {
-		printf("error : capture.open() failed...\n");
-		return -1;
-	}
+	capture >> capture_img;
+	cv::Canny(capture_img, canny_img, 100, 300);
+	cv::dilate(canny_img, dilate_img, cv::Mat());
+	cv::bitwise_not(dilate_img, inv_img);
+}
 
+void init_osc() {
 	udp = new UdpTransmitSocket(IpEndpointName(OSC_HOST, OSC_PORT));
 	osc_send_scratch(0.0);
+}
 
+void finish_osc() {
+	osc_send_scratch(0.0f);
+	delete udp;
+	udp = nullptr;
+}
+
+void init_opencv() {
 	capture >> capture_img;
 	canvas_img.create(capture_img.size(), CV_8UC1);
 	canvas_img = cv::Scalar(255, 255, 255);
@@ -228,6 +229,23 @@ int main(int argc, char* argv[])
 
 	cv::namedWindow("canvas_img");
 	cv::setMouseCallback("canvas_img", onMouse, NULL);
+}
+
+void finish_opencv() {
+	capture.release();
+	cv::destroyAllWindows();
+}
+
+int main(int argc, char* argv[])
+{
+	bool rv = capture.open(0);
+	if (rv == false) {
+		printf("error : capture.open() failed...\n");
+		return -1;
+	}
+
+	init_osc();
+	init_opencv();
 
 	while (true) {
 		process_capture();
@@ -250,13 +268,8 @@ int main(int argc, char* argv[])
 		fps_capture.check();
 	}
 
-	capture.release();
-	cv::destroyAllWindows();
-
-	osc_send_scratch(0.0f);
-
-	delete udp;
-	udp = nullptr;
+	finish_opencv();
+	finish_osc();
 
 	return 0;
 }
