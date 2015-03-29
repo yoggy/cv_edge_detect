@@ -141,8 +141,8 @@ void process_pseudo_frottage(const cv::Mat &src_img, cv::Mat &canvas_img)
 
 	// sound effect (noise)
 	float p = diff_len / 200;
-	if (p > 0.9f) p = 0.9f;
-	p += 0.1f;
+	if (p > 0.8f) p = 0.8f;
+	p += 0.2f;
 	osc_send_scratch(p);
 
 	// sound effect (pop noise)
@@ -188,6 +188,7 @@ void onMouse(int event, int x, int y, int, void*)
 	}
 	else if (event == cv::EVENT_LBUTTONUP) {
 		press_button_l = false;
+		osc_send_scratch(0.0);
 	}
 
 	if (press_button_l) {
